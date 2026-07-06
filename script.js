@@ -122,9 +122,9 @@ function planeEl(d) {
   const el = document.createElement('div');
   el.className = 'plane';
   el.innerHTML =
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">' +
-    '<path d="M12 2l1.5 7.5L22 12l-8.5 2.5L12 22l-1.5-7.5L2 12l8.5-2.5z" transform="rotate(0 12 12)"/>' +
-    '<path d="M12 3l1 8 8 1-8 1-1 8-1-8-8-1 8-1z"/></svg>';
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<path d="M12 2c-.62 0-1.12 1-1.12 2.24v5.02L2.5 13.6v1.68l8.38-2.44v4.6l-2.24 1.62v1.3L12 20.5l3.36.86v-1.3l-2.24-1.62v-4.6l8.38 2.44V13.6l-8.38-4.34V4.24C13.12 3 12.62 2 12 2z"/>' +
+    '</svg>';
   el.style.transform = `rotate(${d.track}deg)`;
   el.style.pointerEvents = 'auto';
   if (selected && selected.id === d.id) el.classList.add('selected');
