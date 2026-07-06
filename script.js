@@ -82,6 +82,7 @@ function makeDummies(n) {
 
 const ALL_PLANES = makeDummies(24);
 let selected = null;
+let hovered = null;
 
 // ---- globe.gl セットアップ ----------------------------------------------
 const world = Globe()(document.getElementById('globe'))
@@ -97,7 +98,7 @@ const world = Globe()(document.getElementById('globe'))
   .htmlAltitude(0.012)
   .htmlElement(planeEl)
   .arcsData([])
-  .arcColor(() => 'rgba(90,200,250,0.75)')
+  .arcColor((a) => a.preview ? 'rgba(90,200,250,0.35)' : 'rgba(90,200,250,0.9)')
   .arcAltitudeAutoScale(0.4)
   .arcStroke(0.6)
   .arcDashLength(0.5)
@@ -130,7 +131,41 @@ function planeEl(d) {
   if (selected && selected.id === d.id) el.classList.add('selected');
   else if (selected) el.classList.add('dim');
   el.addEventListener('click', (e) => { e.stopPropagation(); selectPlane(d); });
+  el.addEventListener('mouseenter', () => { hovered = d; showTip(d); buildArcs(); });
+  el.addEventListener('mousemove', moveTip);
+  el.addEventListener('mouseleave', () => { hovered = null; hideTip(); buildArcs(); });
   return el;
+}
+
+// ---- ホバー用ツールチップ + 航路弧プレビュー ---------------------------
+const tip = document.createElement('div');
+tip.id = 'tip';
+tip.className = 'glass';
+document.body.appendChild(tip);
+
+function showTip(d) {
+  tip.innerHTML =
+    `<strong>${d.callsign}</strong><span>${d.origin.iata} → ${d.destination.iata}</span>`;
+  tip.classList.add('show');
+}
+function moveTip(e) {
+  tip.style.left = (e.clientX + 16) + 'px';
+  tip.style.top = (e.clientY + 16) + 'px';
+}
+function hideTip() { tip.classList.remove('show'); }
+
+function arcFor(d, preview) {
+  return {
+    startLat: d.origin.lat, startLng: d.origin.lng,
+    endLat: d.destination.lat, endLng: d.destination.lng,
+    preview,
+  };
+}
+function buildArcs() {
+  const arcs = [];
+  if (selected) arcs.push(arcFor(selected, false));
+  if (hovered && (!selected || hovered.id !== selected.id)) arcs.push(arcFor(hovered, true));
+  world.arcsData(arcs);
 }
 
 // ---- 描画更新（フィルタ・上限を反映） -----------------------------------
@@ -165,10 +200,7 @@ function selectPlane(d) {
   $('cTrk').textContent = Math.round(d.track) + '°';
   $('cCountry').textContent = d.country;
 
-  world.arcsData([{
-    startLat: d.origin.lat, startLng: d.origin.lng,
-    endLat: d.destination.lat, endLng: d.destination.lng,
-  }]);
+  buildArcs();
 
   $('card').classList.add('open');
   $('card').setAttribute('aria-hidden', 'false');
@@ -179,7 +211,7 @@ function closeCard() {
   selected = null;
   $('card').classList.remove('open');
   $('card').setAttribute('aria-hidden', 'true');
-  world.arcsData([]);
+  buildArcs();
   render();
 }
 
