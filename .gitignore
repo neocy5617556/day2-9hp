@@ -1,0 +1,13 @@
+# secrets — 絶対にコミットしない
+.env
+.env.*
+!.env.example
+
+# deps / build
+node_modules/
+.netlify/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.log

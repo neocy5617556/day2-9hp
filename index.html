@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flight Globe — リアルタイム世界フライト</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/globe.gl@2"></script>
+</head>
+<body>
+  <!-- 3D 地球儀 -->
+  <div id="globe"></div>
+
+  <!-- ヘッダー -->
+  <header id="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>Flight Globe</h1>
+      <p id="status">起動中…</p>
+    </div>
+  </header>
+
+  <!-- コントロールパネル（フロストガラス） -->
+  <aside id="panel" class="glass">
+    <div class="field">
+      <label for="search">検索</label>
+      <input id="search" type="text" placeholder="便名・登録国で絞り込み" autocomplete="off" />
+    </div>
+
+    <div class="field">
+      <label for="limit">表示機数の上限 <span id="limitVal">1500</span></label>
+      <input id="limit" type="range" min="1" max="1500" value="1500" step="1" />
+    </div>
+
+    <div class="row">
+      <label for="rotate">自動回転</label>
+      <button id="rotate" class="toggle on" role="switch" aria-checked="true"><span></span></button>
+    </div>
+
+    <p class="hint" id="count">— 機を表示中</p>
+  </aside>
+
+  <!-- 詳細カード（スライドイン） -->
+  <section id="card" class="glass" aria-hidden="true">
+    <button id="cardClose" aria-label="閉じる">&times;</button>
+    <h2 id="cCallsign">—</h2>
+    <p id="cAirline" class="muted">—</p>
+
+    <div class="route">
+      <div class="ap"><span id="cFrom">—</span><small id="cFromName">出発</small></div>
+      <div class="arrow">→</div>
+      <div class="ap"><span id="cTo">—</span><small id="cToName">到着</small></div>
+    </div>
+
+    <dl class="stats">
+      <div><dt>高度</dt><dd id="cAlt">—</dd></div>
+      <div><dt>速度</dt><dd id="cSpd">—</dd></div>
+      <div><dt>機首方位</dt><dd id="cTrk">—</dd></div>
+      <div><dt>登録国</dt><dd id="cCountry">—</dd></div>
+    </dl>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
