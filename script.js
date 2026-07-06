@@ -18,30 +18,48 @@ const AIRPORTS = {
   FRA: { name: 'フランクフルト', iata: 'FRA', lat: 50.0379, lng: 8.5622 },
 };
 
-// 出発→到着 の経路上の点を求める（大円補間）
-function interpolate(a, b, t) {
-  const toRad = (d) => (d * Math.PI) / 180;
-  const toDeg = (r) => (r * 180) / Math.PI;
+const toRad = (d) => (d * Math.PI) / 180;
+const toDeg = (r) => (r * 180) / Math.PI;
+
+// 大円上の点（t: 0=出発, 1=到着）
+function greatCircle(a, b, t) {
   const φ1 = toRad(a.lat), λ1 = toRad(a.lng);
   const φ2 = toRad(b.lat), λ2 = toRad(b.lng);
   const d = 2 * Math.asin(Math.sqrt(
     Math.sin((φ2 - φ1) / 2) ** 2 +
     Math.cos(φ1) * Math.cos(φ2) * Math.sin((λ2 - λ1) / 2) ** 2
   ));
-  if (d === 0) return { lat: a.lat, lng: a.lng, track: 0 };
+  if (d === 0) return { lat: a.lat, lng: a.lng };
   const A = Math.sin((1 - t) * d) / Math.sin(d);
   const B = Math.sin(t * d) / Math.sin(d);
   const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
   const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
   const z = A * Math.sin(φ1) + B * Math.sin(φ2);
-  const lat = toDeg(Math.atan2(z, Math.sqrt(x * x + y * y)));
-  const lng = toDeg(Math.atan2(y, x));
-  // 機首方位（到着地への初期方位）
+  return {
+    lat: toDeg(Math.atan2(z, Math.sqrt(x * x + y * y))),
+    lng: toDeg(Math.atan2(y, x)),
+  };
+}
+
+// a から b への方位（度・0=北, 時計回り）
+function bearing(a, b) {
+  const φ1 = toRad(a.lat), φ2 = toRad(b.lat);
+  const Δλ = toRad(b.lng - a.lng);
   const θ = Math.atan2(
-    Math.sin(λ2 - λ1) * Math.cos(φ2),
-    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1)
+    Math.sin(Δλ) * Math.cos(φ2),
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ)
   );
-  return { lat, lng, track: (toDeg(θ) + 360) % 360 };
+  return (toDeg(θ) + 360) % 360;
+}
+
+// 機体の現在位置と機首方位を p.t / p.dir から更新
+function planeState(p) {
+  const cur = greatCircle(p.origin, p.destination, p.t);
+  const ahead = Math.min(0.999, Math.max(0.001, p.t + p.dir * 0.004));
+  const nxt = greatCircle(p.origin, p.destination, ahead);
+  p.lat = cur.lat;
+  p.lng = cur.lng;
+  p.track = bearing(cur, nxt); // 進行方向の局所方位
 }
 
 // ---- ダミー機体を生成 ---------------------------------------------------
@@ -61,21 +79,22 @@ function makeDummies(n) {
     let d = CODES[(i * 7 + 2) % CODES.length];
     if (o === d) d = CODES[(i * 7 + 3) % CODES.length];
     const al = AIRLINES[i % AIRLINES.length];
-    const t = ((i * 0.137) % 0.8) + 0.1; // 経路上の進捗
-    const pos = interpolate(AIRPORTS[o], AIRPORTS[d], t);
-    list.push({
+    const p = {
       id: 'DUMMY' + i,
       callsign: al.code + (100 + i * 7),
       airline: al.name,
       country: COUNTRIES[i % COUNTRIES.length],
       origin: AIRPORTS[o],
       destination: AIRPORTS[d],
-      lat: pos.lat,
-      lng: pos.lng,
-      alt: 9000 + ((i * 733) % 3500),      // m
-      velocity: 210 + ((i * 37) % 60),      // m/s
-      track: pos.track,
-    });
+      alt: 9000 + ((i * 733) % 3500),          // m
+      velocity: 210 + ((i * 37) % 60),          // m/s
+      t: ((i * 0.137) % 0.8) + 0.1,             // 経路上の進捗
+      dir: 1,                                   // 進行方向（往復）
+      dt: 0.00018 + ((i * 37) % 60) * 1e-6,     // 1フレームあたりの進み（速度依存）
+      lat: 0, lng: 0, track: 0,
+    };
+    planeState(p);
+    list.push(p);
   }
   return list;
 }
@@ -120,21 +139,25 @@ fit();
 
 // ---- 機体の HTML アイコン ------------------------------------------------
 function planeEl(d) {
-  const el = document.createElement('div');
-  el.className = 'plane';
-  el.innerHTML =
+  // 外側ラッパー = globe.gl が位置決めに使う（transform を毎フレーム上書きする）。
+  // 内側 = 機首方位の回転専用。分離しないと回転が消える。
+  const wrap = document.createElement('div');
+  wrap.className = 'plane-wrap';
+  const inner = document.createElement('div');
+  inner.className = 'plane';
+  inner.innerHTML =
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
     '<path d="M12 2c-.62 0-1.12 1-1.12 2.24v5.02L2.5 13.6v1.68l8.38-2.44v4.6l-2.24 1.62v1.3L12 20.5l3.36.86v-1.3l-2.24-1.62v-4.6l8.38 2.44V13.6l-8.38-4.34V4.24C13.12 3 12.62 2 12 2z"/>' +
     '</svg>';
-  el.style.transform = `rotate(${d.track}deg)`;
-  el.style.pointerEvents = 'auto';
-  if (selected && selected.id === d.id) el.classList.add('selected');
-  else if (selected) el.classList.add('dim');
-  el.addEventListener('click', (e) => { e.stopPropagation(); selectPlane(d); });
-  el.addEventListener('mouseenter', () => { hovered = d; showTip(d); buildArcs(); });
-  el.addEventListener('mousemove', moveTip);
-  el.addEventListener('mouseleave', () => { hovered = null; hideTip(); buildArcs(); });
-  return el;
+  inner.style.transform = `rotate(${d.track}deg)`;
+  wrap.appendChild(inner);
+  d.__wrap = wrap;
+  d.__inner = inner;
+  wrap.addEventListener('click', (e) => { e.stopPropagation(); selectPlane(d); });
+  wrap.addEventListener('mouseenter', () => { hovered = d; showTip(d); buildArcs(); });
+  wrap.addEventListener('mousemove', moveTip);
+  wrap.addEventListener('mouseleave', () => { hovered = null; hideTip(); buildArcs(); });
+  return wrap;
 }
 
 // ---- ホバー用ツールチップ + 航路弧プレビュー ---------------------------
@@ -180,10 +203,32 @@ function currentList() {
   return list.slice(0, limit);
 }
 
+function applyHighlight() {
+  for (const p of ALL_PLANES) {
+    if (!p.__wrap) continue;
+    p.__wrap.classList.toggle('selected', !!selected && selected.id === p.id);
+    p.__wrap.classList.toggle('dim', !!selected && selected.id !== p.id);
+  }
+}
+
 function render() {
   const list = currentList();
   world.htmlElementsData(list);
+  applyHighlight();
   $('count').textContent = `${list.length} 機を表示中`;
+}
+
+// ---- アニメーション: 大円航路上を往復で飛ばす --------------------------
+function tick() {
+  for (const p of ALL_PLANES) {
+    p.t += p.dir * p.dt;
+    if (p.t >= 0.97) { p.t = 0.97; p.dir = -1; }
+    else if (p.t <= 0.03) { p.t = 0.03; p.dir = 1; }
+    planeState(p);
+    if (p.__inner) p.__inner.style.transform = `rotate(${p.track}deg)`;
+  }
+  render(); // 位置を反映（globe.gl が座標を読み直して再配置）
+  requestAnimationFrame(tick);
 }
 
 // ---- 機体選択 → 詳細カード + 航路弧 -------------------------------------
@@ -238,4 +283,5 @@ world.onGlobeClick(closeCard);
 
 // ---- 起動 ---------------------------------------------------------------
 render();
-$('status').textContent = `ダミー ${ALL_PLANES.length} 機を表示中 · Phase 1`;
+requestAnimationFrame(tick); // アニメーション開始
+$('status').textContent = `ダミー ${ALL_PLANES.length} 機が飛行中 · Phase 1`;

@@ -209,16 +209,22 @@ input[type="range"]::-moz-range-thumb {
 #tip span { font-size: 11px; color: var(--accent); font-variant-numeric: tabular-nums; }
 
 /* ---- 機体アイコン ---- */
+/* 外側: globe.gl が位置決め（transform 上書き）／内側: 機首方位の回転 */
+.plane-wrap {
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.3s var(--ease);
+}
 .plane {
   color: var(--ink);
-  cursor: pointer;
   filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.7));
-  transition: color 0.2s var(--ease), transform 0.2s var(--ease);
+  transition: color 0.2s var(--ease);
   transform-origin: center;
+  will-change: transform;
 }
-.plane:hover { color: var(--accent); }
-.plane.selected { color: var(--accent); }
-.plane.dim { opacity: 0.25; }
+.plane-wrap:hover .plane { color: var(--accent); }
+.plane-wrap.selected .plane { color: var(--accent); }
+.plane-wrap.dim { opacity: 0.25; }
 
 @media (max-width: 640px) {
   #panel { width: calc(100vw - 48px); }
